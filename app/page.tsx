@@ -1,65 +1,251 @@
-import Image from "next/image";
+"use client";
+
+import { useState } from "react";
 
 export default function Home() {
+
+  const [file, setFile] = useState<File | null>(null);
+  const [jd, setJd] = useState("");
+  const [skills, setSkills] = useState<string[]>([]);
+  const [matchResult, setMatchResult] = useState<any>(null);
+  const [email, setEmail] = useState("");
+  const [suggestions, setSuggestions] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [emailLoading, setEmailLoading] = useState(false);
+  const [suggestLoading, setSuggestLoading] = useState(false);
+
+  const handleAnalyze = async () => {
+
+    if (!file) {
+      alert("Upload resume first");
+      return;
+    }
+
+    setLoading(true);
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    // Parse resume
+    const res = await fetch("/api/parse-resume", {
+      method: "POST",
+      body: formData
+    });
+
+    const resumeData = await res.json();
+    setSkills(resumeData.skills);
+
+    // Analyze JD
+    const jdRes = await fetch("/api/analyze-jd", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ jd })
+    });
+
+    const jdData = await jdRes.json();
+
+    // Match skills
+    const matchRes = await fetch("/api/match", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        resumeSkills: resumeData.skills,
+        jdSkills: jdData.jdSkills
+      })
+    });
+
+    const matchData = await matchRes.json();
+    setMatchResult(matchData);
+
+    setLoading(false);
+  };
+
+  const generateEmail = async () => {
+
+    if (!matchResult) {
+      alert("Analyze resume first");
+      return;
+    }
+
+    setEmailLoading(true);
+
+    const res = await fetch("/api/generate-email", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        resumeText: skills.join(", "),
+        jd
+      })
+    });
+
+    const data = await res.json();
+    setEmail(data.email);
+
+    setEmailLoading(false);
+  };
+
+  const generateSuggestions = async () => {
+
+    if (!matchResult) return;
+
+    setSuggestLoading(true);
+
+    const res = await fetch("/api/suggestions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        missingSkills: matchResult.missing
+      })
+    });
+
+    const data = await res.json();
+    setSuggestions(data.suggestions);
+
+    setSuggestLoading(false);
+  };
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <div className="p-10 max-w-xl mx-auto">
+
+      <h1 className="text-3xl font-bold mb-6">
+        AI Job Application Copilot
+      </h1>
+
+      <input
+        type="file"
+        className="border p-2 w-full"
+        onChange={(e) => {
+          if (e.target.files) {
+            setFile(e.target.files[0]);
+          }
+        }}
+      />
+
+      <textarea
+        placeholder="Paste Job Description"
+        className="border w-full p-3 mt-4"
+        value={jd}
+        onChange={(e) => setJd(e.target.value)}
+      />
+
+      <button
+        className="bg-black text-white px-6 py-3 mt-4"
+        onClick={handleAnalyze}
+      >
+        {loading ? "Analyzing..." : "Analyze"}
+      </button>
+
+      {skills.length > 0 && (
+        <div className="mt-6">
+
+          <h2 className="text-xl font-semibold mb-2">
+            Detected Resume Skills
+          </h2>
+
+          <div className="flex flex-wrap gap-2">
+            {skills.map((skill) => (
+              <span
+                key={skill}
+                className="bg-gray-200 px-3 py-1 rounded"
+              >
+                {skill}
+              </span>
+            ))}
+          </div>
+
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
+      )}
+
+      {matchResult && (
+        <div className="mt-8">
+
+          <h2 className="text-xl font-bold mb-2">
+            Match Score
+          </h2>
+
+          <div className="w-full bg-gray-200 rounded-full h-4">
+            <div
+              className="bg-green-500 h-4 rounded-full"
+              style={{ width: `${matchResult.score}%` }}
             />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+          </div>
+
+          <p className="mt-2 font-semibold">
+            {matchResult.score}%
+          </p>
+
+          <h3 className="mt-4 font-semibold">Matched Skills</h3>
+
+          <div className="flex flex-wrap gap-2 mt-2">
+            {matchResult.matched.map((skill: string) => (
+              <span key={skill} className="bg-green-200 px-3 py-1 rounded">
+                {skill}
+              </span>
+            ))}
+          </div>
+
+          <h3 className="mt-4 font-semibold">Missing Skills</h3>
+
+          <div className="flex flex-wrap gap-2 mt-2">
+            {matchResult.missing.map((skill: string) => (
+              <span key={skill} className="bg-red-200 px-3 py-1 rounded">
+                {skill}
+              </span>
+            ))}
+          </div>
+
+          <button
+            className="bg-blue-600 text-white px-6 py-3 mt-6 rounded"
+            onClick={generateEmail}
           >
-            Documentation
-          </a>
+            {emailLoading ? "Generating Email..." : "Generate Recruiter Email"}
+          </button>
+
+          <button
+            className="bg-purple-600 text-white px-6 py-3 mt-4 ml-2 rounded"
+            onClick={generateSuggestions}
+          >
+            {suggestLoading ? "Generating Suggestions..." : "Get Skill Suggestions"}
+          </button>
+
         </div>
-      </main>
+      )}
+
+      {email && (
+        <div className="mt-6 p-4 border rounded">
+
+          <h2 className="font-bold text-lg mb-2">
+            AI Generated Email
+          </h2>
+
+          <p className="whitespace-pre-line mb-4">
+            {email}
+          </p>
+
+          <button
+            className="bg-gray-800 text-white px-4 py-2 rounded"
+            onClick={() => navigator.clipboard.writeText(email)}
+          >
+            Copy Email
+          </button>
+
+        </div>
+      )}
+
+      {suggestions && (
+        <div className="mt-6 p-4 border rounded">
+
+          <h2 className="font-bold text-lg mb-2">
+            AI Skill Suggestions
+          </h2>
+
+          <p className="whitespace-pre-line">
+            {suggestions}
+          </p>
+
+        </div>
+      )}
+
     </div>
   );
 }
